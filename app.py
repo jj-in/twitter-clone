@@ -13,7 +13,7 @@ app = Flask(__name__)
 
 # Get DB_URI from environ variable (useful for production/testing) or,
 # if not set there, use development local db.
-app.config["SQLALCHEMY_DATABASE_URI"] = "postgresql:///warbler"
+app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv(DATABASE_URL)
 app.config["SECRET_KEY"] = "sekret"
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
