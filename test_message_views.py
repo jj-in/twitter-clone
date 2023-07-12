@@ -22,6 +22,9 @@ os.environ['DATABASE_URL'] = "postgresql:///warbler-test"
 
 from app import app, CURR_USER_KEY
 
+app_ctx = app.app_context()
+app_ctx.push()
+
 # Create our tables (we do this here, so we only create the tables
 # once for all tests --- in each test, we'll delete the data
 # and create fresh new clean test data
@@ -51,6 +54,11 @@ class MessageViewTestCase(TestCase):
 
         db.session.commit()
 
+    def tearDown(self):
+        res = super().tearDown()
+        db.session.rollback()
+        return res        
+
     def test_add_message(self):
         """Can use add a message?"""
 
@@ -71,3 +79,41 @@ class MessageViewTestCase(TestCase):
 
             msg = Message.query.one()
             self.assertEqual(msg.text, "Hello")
+
+    def test_get_message(self):
+        
+        with self.client as c:
+            with c.session_transaction() as sess:
+                sess[CURR_USER_KEY] = self.testuser.id
+
+            c.post("/messages/new", data={"text": "Hello test world"})
+            msg = Message.query.one()
+            resp = c.get(f"messages/{msg.id}")
+            self.assertEqual(resp.status_code, 200)
+            self.assertIn(b'<p class="single-message">', resp.data)
+            self.assertIn(b'Hello test world', resp.data)
+            self.assertIn(b'@testuser', resp.data)
+
+    def test_delete_message(self):
+        
+        with self.client as c:
+            with c.session_transaction() as sess:
+                sess[CURR_USER_KEY] = self.testuser.id
+
+            c.post("/messages/new", data={"text": "Delete me plz"})
+            msg = Message.query.one()
+            del_resp = c.post(f"messages/{msg.id}/delete")
+            self.assertEqual(del_resp.status_code, 302)
+            get_resp = c.get(f"messages/{msg.id}")
+            self.assertEqual(get_resp.status_code, 500)
+
+    def test_loggedout_delete(self):
+        
+        with self.client as c:
+
+            resp1 = c.get("/")
+            self.assertIn(b'Sign up now', resp1.data)
+            resp2 = c.post("/messages/new", data={"text": "Bad post"})
+            self.assertEqual(resp2.status_code, 302)
+
+    
